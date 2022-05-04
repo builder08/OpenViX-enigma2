@@ -1,18 +1,20 @@
+from __future__ import print_function
+from __future__ import absolute_import
 from re import escape as re_escape
 
 from enigma import eTimer, eEnv
 
+from Screens.Screen import Screen
 from Components.ActionMap import ActionMap, NumberActionMap
+from Components.Pixmap import MultiPixmap
+from Components.Sources.StaticText import StaticText
+from Components.Sources.List import List
 from Components.config import config, ConfigYesNo, NoSave, ConfigSubsection, ConfigText, ConfigSelection, ConfigPassword
 from Components.Network import iNetwork
-from Components.Pixmap import MultiPixmap
-from Components.Sources.List import List
-from Components.Sources.StaticText import StaticText
 from Plugins.Plugin import PluginDescriptor
-from Screens.Screen import Screen
-from Tools.Directories import resolveFilename, SCOPE_CURRENT_SKIN
+from Tools.Directories import resolveFilename, SCOPE_GUISKIN
 from Tools.LoadPixmap import LoadPixmap
-from .Wlan import iWlan, iStatus, getWlanConfigName, existBcmWifi
+from .Wlan import iWlan, iStatus, getWlanConfigName
 
 
 plugin_path = eEnv.resolve("${libdir}/enigma2/python/Plugins/SystemPlugins/WirelessLan")
@@ -67,7 +69,6 @@ class WlanStatus(Screen):
 
 	def __init__(self, session, iface):
 		Screen.__init__(self, session)
-		self.session = session
 		self.iface = iface
 
 		self["LabelBSSID"] = StaticText(_('Accesspoint:'))
@@ -150,7 +151,7 @@ class WlanStatus(Screen):
 					if status[self.iface]["bitrate"] == '0':
 						bitrate = _("Unsupported")
 					else:
-						bitrate = str(status[self.iface]["bitrate"]) + " Mb/s"
+						bitrate = str(status[self.iface]["bitrate"])
 					if "bitrate" in self:
 						self["bitrate"].setText(bitrate)
 
@@ -233,7 +234,7 @@ class WlanScan(Screen):
 							MultiContentEntryText(pos = (175, 30), size = (175, 20), font=1, flags = RT_HALIGN_LEFT, text = 4), # index 0 is the encryption
 							MultiContentEntryText(pos = (350, 0), size = (200, 20), font=1, flags = RT_HALIGN_LEFT, text = 2), # index 0 is the signal
 							MultiContentEntryText(pos = (350, 30), size = (200, 20), font=1, flags = RT_HALIGN_LEFT, text = 3), # index 0 is the maxrate
-							MultiContentEntryPixmapAlphaBlend(pos = (0, 52), size = (550, 2), png = 6), # index 6 is the div pixmap
+							MultiContentEntryPixmapAlphaTest(pos = (0, 52), size = (550, 2), png = 6), # index 6 is the div pixmap
 						],
 					"fonts": [gFont("Regular", 28),gFont("Regular", 18)],
 					"itemHeight": 54
@@ -246,7 +247,6 @@ class WlanScan(Screen):
 
 	def __init__(self, session, iface):
 		Screen.__init__(self, session)
-		self.session = session
 		self.iface = iface
 		self.skin_path = plugin_path
 		self.oldInterfaceState = iNetwork.getAdapterAttribute(self.iface, "up")
@@ -256,7 +256,7 @@ class WlanScan(Screen):
 		self.cleanList = None
 		self.oldlist = {}
 		self.listLength = None
-		self.divpng = LoadPixmap(path=resolveFilename(SCOPE_CURRENT_SKIN, "div-h.png"))
+		self.divpng = LoadPixmap(path=resolveFilename(SCOPE_GUISKIN, "div-h.png"))
 
 		self.rescanTimer = eTimer()
 		self.rescanTimer.callback.append(self.rescanTimerFired)
@@ -328,7 +328,7 @@ class WlanScan(Screen):
 		currentListEntry = None
 		currentListIndex = None
 
-		for ap in self.oldlist.keys():
+		for ap in list(self.oldlist.keys()):
 			data = self.oldlist[ap]['data']
 			if data is not None:
 				tmpList.append(data)
@@ -424,17 +424,22 @@ def callFunction(iface):
 def configStrings(iface):
 	driver = iNetwork.detectWlanModule(iface)
 	ret = ""
-	if existBcmWifi(iface):
+	if driver == "brcm-wl":
 		encryption = config.plugins.wlan.encryption.value
-		psk = config.plugins.wlan.psk.value
-		essid = config.plugins.wlan.essid.value
-		ret += '\tpre-up wl-config.sh -m ' + encryption.lower() + ' -k ' + psk + ' -s "' + essid + '" \n'
-		ret += '\tpost-down wl-down.sh\n'
-	else:
-		if driver == 'madwifi' and config.plugins.wlan.hiddenessid.value:
-			ret += "\tpre-up iwconfig " + iface + " essid \"" + re.escape(config.plugins.wlan.essid.value) + "\" || true\n"
-		ret += "\tpre-up wpa_supplicant -i" + iface + " -c" + getWlanConfigName(iface) + " -B -dd -D" + driver + " || true\n"
-		ret += "\tpre-down wpa_cli -i" + iface + " terminate || true\n"
+		if encryption == "WPA/WPA2":
+			encryption = "WPA2"
+		encryption = encryption.lower()
+		if encryption == "unencrypted":
+			encryption = "None"
+		ret += '\tpre-up wl-config.sh -m ' + encryption + ' -k ' + config.plugins.wlan.psk.value + ' -s \"' + config.plugins.wlan.essid.value + '\" || true\n'
+		ret += '\tpost-down wl-down.sh || true\n'
+		return ret
+	if driver == 'madwifi' and config.plugins.wlan.hiddenessid.value:
+		ret += "\tpre-up iwconfig " + iface + " essid \"" + re_escape(config.plugins.wlan.essid.value) + "\" || true\n"
+	ret += "\tpre-up wpa_supplicant -i" + iface + " -c" + getWlanConfigName(iface) + " -B -dd -D" + driver + " || true\n"
+	if config.plugins.wlan.hiddenessid.value == True:
+		ret += "\tpre-up iwconfig " + iface + " essid \"" + re_escape(config.plugins.wlan.essid.value) + "\" || true\n"
+	ret += "\tpre-down wpa_cli -i" + iface + " terminate || true\n"
 	return ret
 
 
