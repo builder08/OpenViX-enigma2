@@ -63,4 +63,12 @@ if HAVE_OSDANIMATION
 SUBDIRS += AnimationSetup
 endif
 
+if DM900
+SUBDIRS += FSBLUpdater
+endif
+
+if DM920
+SUBDIRS += FSBLUpdater
+endif
+
 install_PYTHON = __init__.py
