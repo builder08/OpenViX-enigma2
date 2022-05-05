@@ -63,6 +63,10 @@ if HAVE_OSDANIMATION
 SUBDIRS += AnimationSetup
 endif
 
+if DREAMBOX
+SUBDIRS += FrontprocessorUpgrade
+endif
+
 if DM900
 SUBDIRS += FSBLUpdater
 endif
